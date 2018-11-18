@@ -4,54 +4,36 @@ const _ = require("lodash"),
 		tables = require(__dirname + "/models/index.js").models.autoLoad(),
 		lib = require(__dirname + "/lib/scraperLib.js");
 
-
 /* BEGIN SCRAPER HERE */
 const puppeteer = require('puppeteer');
 
 (async () => {
+	//LAUNCH BROWSER AND OPEN PAGE
 	const browser = await puppeteer.launch({ headless: false });
 	const page = await browser.newPage();
 
+	//GO TO SEARCH PAGE
 	await page.goto('https://onlineapps.jcope.ny.gov/LobbyWatch/Administration/LB_QReports.aspx?x=EGw%2bBNjmIIk%2bTQUBGN7pED10fXAXcogZP6GEV89sCdPw8eiEP2cWlFV0iTpwqOHAVtn1TV6YrB%2fe5fTYLs%2fVIiqqkRBl4cW6GDnl1CDH%2fGxDZWR2k7wHqkWtmdfh4mnaZveXrARrFWVY0V3cIOY6x467ipQk3eev2BXieMuPcJK2', { waitUntil: ['load', 'domcontentloaded'] });
 
+	//ENTER CLIENT NAME QUERY
 	const inputSelector = 'input#txtQCName';
-	await page.type(inputSelector, '')
+	await page.type(inputSelector, 'uber')
 
+	//HIT SEARCH BUTTON
 	const buttonSelector = '#btnSearch'
 	await page.click(buttonSelector)
 
+	//Wait until DOM content loaded, add jQuery to page
 	await page.waitForNavigation({ waitUntil: 'domcontentloaded' });
 	await page.waitForSelector('tr.Row');
 	await page.addScriptTag({ url: 'https://code.jquery.com/jquery-3.2.1.min.js' })
 
+	//Define master link list, gather 'View' links
+	let fullLinkList = []
 	const linkList = await page.evaluate(() => {
 		let rows = document.querySelectorAll('tr.Row');
 
 		let links = []
-
-		let pageCount = parseInt(document.querySelectorAll('div.GridFooterText')[1].children[1].innerText)
-		let pageNum = parseInt(document.querySelectorAll('div.GridFooterText')[1].children[0].innerText)
-
-		var paginationDiv = document.querySelectorAll('div.GridFooterText')[0].children
-
-		for (let i = 0; i < paginationDiv.length; i++) {
-			if (parseInt(paginationDiv[i].innerText) === pageNum + 1) {
-				let nextPage = paginationDiv[i]
-				console.log(`okay! ${paginationDiv[i].innerText}`)
-			} else {
-				console.log(`womp womp ${paginationDiv[i].innerText}`)
-			}
-		}
-
-		// paginationArray.forEach((num) => {
-		// 	console.log(parseInt(num.innerText))
-		// 	console.log(pageNum)
-		// 	if (parseInt(num.innerText) === pageNum + 1) {
-		// 		console.log('okay!')
-		// 	} else {
-		// 		console.log('womp womp')
-		// 	}
-		// })
 
 		rows.forEach((r) => {
 			let link = r.getElementsByTagName('a')[0].href
@@ -59,8 +41,25 @@ const puppeteer = require('puppeteer');
 		})
 		return links
 	})
-	console.log(linkList)
-	console.log(nextPage)
+
+	//Save current page number and total page count
+	let pageCount = await page.evaluate(() => parseInt(document.querySelectorAll('div.GridFooterText')[1].children[1].innerText))
+	let pageNum = await page.evaluate(() => parseInt(document.querySelectorAll('div.GridFooterText')[1].children[0].innerText))
+
+	//Find link to go to next page, try and fail to click on link
+	let nextSelector = `a[onclick='DisplayGrid.Page(${pageNum});return false;']`
+	await page.waitForSelector(nextSelector);
+	await page.$eval(nextSelector, el => el.click())
+	//Don't know why this function doesn't work
+	// await page.click(nextSelector)
+
+	//Move page's links to master link list
+	linkList.forEach((link) => {
+		fullLinkList.push(link)
+	})
+
+	//Print master link list
+	console.log(fullLinkList)
 })()
 
 /**
