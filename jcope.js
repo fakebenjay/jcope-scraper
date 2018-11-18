@@ -28,6 +28,10 @@ const puppeteer = require('puppeteer');
 	await page.waitForSelector('tr.Row');
 	await page.addScriptTag({ url: 'https://code.jquery.com/jquery-3.2.1.min.js' })
 
+	//Save current page number and total page count
+	let pageCount = await page.evaluate(() => parseInt(document.querySelectorAll('div.GridFooterText')[1].children[1].innerText))
+	let pageNum = await page.evaluate(() => parseInt(document.querySelectorAll('div.GridFooterText')[1].children[0].innerText))
+
 	//Define master link list, gather 'View' links
 	let fullLinkList = []
 	const linkList = await page.evaluate(() => {
@@ -41,10 +45,6 @@ const puppeteer = require('puppeteer');
 		})
 		return links
 	})
-
-	//Save current page number and total page count
-	let pageCount = await page.evaluate(() => parseInt(document.querySelectorAll('div.GridFooterText')[1].children[1].innerText))
-	let pageNum = await page.evaluate(() => parseInt(document.querySelectorAll('div.GridFooterText')[1].children[0].innerText))
 
 	//Find link to go to next page, try and fail to click on link
 	let nextSelector = `a[onclick='DisplayGrid.Page(${pageNum});return false;']`
