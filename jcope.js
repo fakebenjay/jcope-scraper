@@ -7,7 +7,7 @@ const _ = require("lodash"),
 /* BEGIN SCRAPER HERE */
 const puppeteer = require('puppeteer');
 
-(async () => {
+const lynx = async () => {
 	//LAUNCH BROWSER AND OPEN PAGE
 	const browser = await puppeteer.launch({ headless: false });
 	const page = await browser.newPage();
@@ -32,35 +32,52 @@ const puppeteer = require('puppeteer');
 	let pageCount = await page.evaluate(() => parseInt(document.querySelectorAll('div.GridFooterText')[1].children[1].innerText))
 	let pageNum = await page.evaluate(() => parseInt(document.querySelectorAll('div.GridFooterText')[1].children[0].innerText))
 
-	//Define master link list, gather 'View' links
+	//Define master link list
 	let fullLinkList = []
-	const linkList = await page.evaluate(() => {
-		let rows = document.querySelectorAll('tr.Row');
 
-		let links = []
+	for (pageNum; pageNum <= pageCount; pageNum++) {
+		//Gather 'View' links
+		const linkList = await page.evaluate(() => {
+			let rows = document.querySelectorAll('tr.Row');
+			let links = []
 
-		rows.forEach((r) => {
-			let link = r.getElementsByTagName('a')[0].href
-			links.push(link)
+			rows.forEach((r) => {
+				let link = r.getElementsByTagName('a')[0].href
+				links.push(link)
+			})
+			return links
 		})
-		return links
-	})
 
-	//Find link to go to next page, try and fail to click on link
-	let nextSelector = `a[onclick='DisplayGrid.Page(${pageNum});return false;']`
-	await page.waitForSelector(nextSelector);
-	await page.$eval(nextSelector, el => el.click())
-	//Don't know why this function doesn't work
-	// await page.click(nextSelector)
+		//Find link to go to next page, try and fail to click on link
+		let nextSelector = `a[onclick='DisplayGrid.Page(${pageNum});return false;']`
+		// await page.waitForSelector(nextSelector);
 
-	//Move page's links to master link list
-	linkList.forEach((link) => {
-		fullLinkList.push(link)
-	})
+		//Determine if this is the last page
+		// let lastPage = await page.evaluate((nextSelector) => {
+		// 	if (!!document.querySelector(nextSelector)) {
+		// 		return true
+		// 	} else {
+		// 		return false
+		// 	}
+		// })
 
+		//Click next page link if not last page
+		if (await page.$(nextSelector) !== null) {
+			await page.$eval(nextSelector, el => el.click())
+		}
+		//Don't know why this function doesn't work
+		// await page.click(nextSelector)
+
+		//Move page's links to master link list
+		linkList.forEach((link) => {
+			fullLinkList.push(link)
+		})
+	}
 	//Print master link list
 	console.log(fullLinkList)
-})()
+}
+
+lynx()
 
 /**
  * Leverages the get method from the scraperLib.
