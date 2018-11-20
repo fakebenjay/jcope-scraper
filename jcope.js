@@ -4,10 +4,11 @@ const _ = require("lodash"),
 		tables = require(__dirname + "/models/index.js").models.autoLoad(),
 		lib = require(__dirname + "/lib/scraperLib.js");
 
+
 /* BEGIN SCRAPER HERE */
 const puppeteer = require('puppeteer');
 
-const lynx = async () => {
+(async () => {
 	//LAUNCH BROWSER AND OPEN PAGE
 	const browser = await puppeteer.launch({ headless: false });
 	const page = await browser.newPage();
@@ -15,7 +16,7 @@ const lynx = async () => {
 	//GO TO SEARCH PAGE
 	await page.goto('https://onlineapps.jcope.ny.gov/LobbyWatch/Administration/LB_QReports.aspx?x=EGw%2bBNjmIIk%2bTQUBGN7pED10fXAXcogZP6GEV89sCdPw8eiEP2cWlFV0iTpwqOHAVtn1TV6YrB%2fe5fTYLs%2fVIiqqkRBl4cW6GDnl1CDH%2fGxDZWR2k7wHqkWtmdfh4mnaZveXrARrFWVY0V3cIOY6x467ipQk3eev2BXieMuPcJK2', { waitUntil: ['load', 'domcontentloaded'] });
 
-	//ENTER CLIENT NAME QUERY
+	//ENTER CLIENT NAME QUERY (searches for all filings if param is '')
 	const inputSelector = 'input#txtQCName';
 	await page.type(inputSelector, 'uber')
 
@@ -52,73 +53,87 @@ const lynx = async () => {
 		let nextSelector = `a[onclick='DisplayGrid.Page(${pageNum});return false;']`
 		// await page.waitForSelector(nextSelector);
 
-		//Determine if this is the last page
-		// let lastPage = await page.evaluate((nextSelector) => {
-		// 	if (!!document.querySelector(nextSelector)) {
-		// 		return true
-		// 	} else {
-		// 		return false
-		// 	}
-		// })
-
 		//Click next page link if not last page
 		if (await page.$(nextSelector) !== null) {
 			await page.$eval(nextSelector, el => el.click())
+			//Don't know why this function doesn't work
+			// await page.click(nextSelector)
 		}
-		//Don't know why this function doesn't work
-		// await page.click(nextSelector)
 
 		//Move page's links to master link list
 		linkList.forEach((link) => {
 			fullLinkList.push(link)
 		})
 	}
+	//Close browser window
+	browser.close()
+
 	//Print master link list
 	console.log(fullLinkList)
-}
 
-lynx()
+	/**
+	 * Leverages the get method from the scraperLib.
+	 * The get method returns a Promise allowing for a semantically sensical approach for asynchronous logic.
+	 */
+	fullLinkList.forEach((url) => {
+		lib.get(url).then((data) => {
+			/** Fancy notation for extracting certain object properties as standalone variables */
+			const { $, body, response } = data;
 
-/**
- * Leverages the get method from the scraperLib.
- * The get method returns a Promise allowing for a semantically sensical approach for asynchronous logic.
- */
-// lib.get(url).then((data) => {
-// 	/** Fancy notation for extracting certain object properties as standalone variables */
-// 	const { $, body, response } = data;
-//
-// 	/* Regular ol' jQuery for getting things */
-// 	const list = []
-// 	const title = $("h1#firstHeading").text();
-// 	const headers = $('span.mw-headline')
-// 	const firstGrafs = $("h2 + p")
-//
-// 	// headers.each(function () {
-// 	// 	$thisHeader = $(this)
-// 	// })
-//
-// 	for (let i = 0; i < firstGrafs.length; i++) {
-// 		const subhead = {
-// 			header: headers.eq(i).text(),
-// 			first_graf: firstGrafs.eq(i).text()
-// 		}
-//
-// 		list.push(subhead)
-// 		tables.scrape.create(subhead, function (row, cb) {
-// 			console.log(`${subhead.header} done`)
-// 		})
-// 	}
-//
-// 	// Avoid arrow function callback to avoid lexical 'this' for correct scope
-//
-// 	console.log(`\x1b[40m${title}\x1b[0m`)
-// 	/* Regular ol' console log for checking the work */
-// 	for (let j = 0; j < list.length; j++) {
-// 		console.log(list[j])
-// 	}
-//
-// }).catch((err) => {
-// 	/** This is where errors go -- if the get(url) method has an error, it will be handled here */
-// 	console.log(err);
-// 	process.exit();
-// });
+			/* Regular ol' jQuery for getting things */
+			const period = $('#lblcsrPeriod').text()
+			const year = $('#lblcsrYear').text()
+
+			const clientName = $('#lblCName').text().trim()
+			const clientAddress = $('#lblCAddress').text().trim()
+			const clientPhone = $('#lblCPhone').text().trim()
+			const clientCAO = $('#lblCAOfficer').text().trim()
+			const lobbyingType = $('#lblTOLobbying').text().trim()
+
+			//Properties to scrape for a later version of this, more comprehensive, client-facing version of this
+			const subjects = $('#tblSubjects').text().trim()
+			const lobbyees = $('#tblPersons').text().trim()
+			const bills = $('#tblBills').text().trim()
+			const titleIDNum = $('#tblTitle').text().trim()
+			const execOrder = $('#tblNumber').text().trim()
+			const tribalCompacts = $('#tblSMatter').text().trim()
+
+			//Get sibling spans of lobbyist compensation amounts
+			const currPeriodCompRef = $("span:contains('Compensation for current period:')")
+			// const lobbyistSubHeads = $("#LobbyistInfo_tdECGrid .SubHead")
+
+			//Gets lobbyist compensation spans based on neighborind spans, converts to integers
+			const lobbyistCompArray = currPeriodCompRef.toArray().map((ref) => {
+				return parseInt(ref.parent.parent.children[3].children[0].data.trim())
+			})
+
+			//Totals all lobbyist compensation fees
+			const lobbyistCompensation = lobbyistCompArray.reduce((total, num) => { return total + num })
+			const lobbyingExpenses = parseInt($('span#lblTotExp').text().replace('$', ''))
+
+			const filing = {
+				clientName: clientName,
+				period: period,
+				year: year,
+				clientAddress: clientAddress,
+				clientPhone: clientPhone,
+				clientCAO: clientCAO,
+				lobbyingType: lobbyingType,
+				lobbyistCompensation: lobbyistCompensation,
+				lobbyingExpenses: lobbyingExpenses
+			}
+
+			/* Regular ol' console log for checking the work */
+			console.log(`${filing.clientName} (${period} ${year})`)
+
+			// Push to MySQL
+			tables.scrape.create(filing, function (row, cb) {
+				console.log(`${filing.clientname} (${period} ${year}) done`)
+			})
+		}).catch((err) => {
+			/** This is where errors go -- if the get(url) method has an error, it will be handled here */
+			console.log(err);
+			process.exit();
+		})
+	})
+})()

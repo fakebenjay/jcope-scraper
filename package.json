@@ -8,6 +8,7 @@
   "dependencies": {
     "async": "^2.0.1",
     "cheerio": "^0.22.0",
+    "jsdom": "^13.0.0",
     "lodash": "^4.15.0",
     "moment": "^2.14.1",
     "mysql": "^2.11.1",
